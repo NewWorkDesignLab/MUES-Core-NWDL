@@ -1,0 +1,21 @@
+{
+  "name": "com.j0nes-l.mues-core",
+  "displayName": "MUES Core",
+  "version": "1.0.1",
+  "unity": "6000.0",
+  "description": "Package with multiuser environment sharing functionality for XR Applications in Unity 6.",
+  "author": { "name": "Jonas Ludorf" },
+  "repository": "github:j0nes-L/MUES-Core",
+  "license": "MIT",
+  "dependencies": {
+    "com.unity.xr.management": "4.4.0",
+    "com.meta.xr.sdk.all": "78.0.0"
+  },
+  "samples": [
+  {
+    "displayName": "MUES Core Sample",
+    "description": "A demo scene displaying the package functionalities.",
+    "path": "Samples~"
+  }
+]
+}
