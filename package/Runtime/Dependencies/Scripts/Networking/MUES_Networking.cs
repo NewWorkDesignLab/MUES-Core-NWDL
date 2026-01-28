@@ -437,11 +437,6 @@ public class MUES_Networking : MonoBehaviour
         MUES_SessionMeta.Instance.JoinEnabled = true;
         isConnected = true;
 
-        // --- OBJECT INSTANTIATION TESTING - HOST ---
-        var (spawnPos, spawnRot) = GetSpawnPoseInFrontOfCamera(0.75f);
-        MUES_NetworkedObjectManager.Instance.InstantiateFromServer("CMT_Model.glb", spawnPos, spawnRot, true, false);
-        // ---
-
         StartCoroutine(SendQrString($"MUESJoin_{currentRoomToken}"));
     }
 
@@ -453,16 +448,16 @@ public class MUES_Networking : MonoBehaviour
         ConsoleMessage.Send(debugMode, $"QR payload: {qrPayload}", Color.cyan);
 
         WWWForm form = new();
-        form.AddField("token", "MUES_2026");
+        form.AddField("token", "YOUR_TOKEN");
         form.AddField("data", qrPayload);
 
-        using UnityWebRequest www = UnityWebRequest.Post("https://00224466.xyz/mues/setqr.php", form);
+        using UnityWebRequest www = UnityWebRequest.Post("YOUR_DOMAIN/mues/setqr.php", form);
         yield return www.SendWebRequest();
 
         if (www.result == UnityWebRequest.Result.Success)
         {
 #if UNITY_EDITOR
-            if (popUpQRCode) Application.OpenURL("https://newworkdesignlab.github.io/MUES");
+            if (popUpQRCode) Application.OpenURL("YOUR_DOMAIN");
 #endif
             ConsoleMessage.Send(debugMode, "QR-Request sent successfully.", Color.green);
         }

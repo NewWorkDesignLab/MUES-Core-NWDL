@@ -750,23 +750,10 @@ public class MUES_RoomVisualizer : MonoBehaviour
 #region Data Classes
 
 [Serializable]
-public class InstantiatedRoomAnchor
-{
-    public Transform transform;
-    public MeshRenderer meshRenderer;
-}
-
-[Serializable]
 public class RoomData
 {
     public AnchorTransformData[] anchorTransformData;
     public FloorCeilingData floorCeilingData;
-}
-
-[Serializable]
-public class ChairData
-{
-    public TransformationData[] chairTransforms;
 }
 
 [Serializable]

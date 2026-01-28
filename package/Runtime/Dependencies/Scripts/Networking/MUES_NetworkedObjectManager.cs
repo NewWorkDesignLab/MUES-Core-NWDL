@@ -15,7 +15,7 @@ public class MUES_NetworkedObjectManager : MonoBehaviour
     [Tooltip("Enable to see debug messages in the console.")]
     public bool debugMode;
 
-    private readonly string serverUrl = "YOUR_SERVER_URL/MUES_Models";    // Base URL for model downloads
+    private readonly string serverUrl = "YOUR_DOMAIN/mues_models";    // Base URL for model downloads
 
     private readonly Dictionary<string, Task<string>> _activeDownloads = new Dictionary<string, Task<string>>();    // Tracks active model download tasks
 
