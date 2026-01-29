@@ -741,7 +741,6 @@ public class MUES_RoomVisualizer : MonoBehaviour
         if (cam == null) return;
 
         cam.cullingMask = hide ? LayerMask.GetMask("RenderWhileLoading") : originalCullingMask | LayerMask.GetMask("Floor");
-        MUES_Networking.Instance.loadingText.SetActive(hide);
     }
 
     #endregion

@@ -30,20 +30,29 @@ public class MUES_Networking : MonoBehaviour
     [Tooltip("Maximum number of players allowed in the room.")]
     [Range(2, 10)] public int maxPlayers = 10;
 
+    [Header("Data Fetching:")]
+    [Tooltip("Domain endpoint for displaying QR codes.")]
+    public string qrDisplayDomain;
+    [Tooltip("Domain endpoint for setting QR code data.")]
+    public string qrSetDomain;
+    [Tooltip("Token used for authenticating QR code requests.")]
+    public string qrSendToken;
+    [Tooltip("Domain endpoint for downloading 3D models.")]
+    public string modelDownloadDomain;
+
     [Header("Debug Settings:")]
     [Tooltip("Enable to see debug messages in the console.")]
     public bool debugMode = false;
     [Tooltip("If the QR Code for joining gets displayed immediately.")]
     public bool popUpQRCode = false;
     [Tooltip("If the avatars are shown for all users - even if they are not remote.")]
-    public bool showAvatarsForColocated = true;
-    [Tooltip("Forces the client into remote mode (Debug only)")]
+    public bool showAvatarsForColocated = false;
+    [Tooltip("Forces the client into remote mode.")]
     public bool forceClientRemote = false;
 
     [HideInInspector] public Guid anchorGroupUuid;  // The UUID for the shared spatial anchor group.
     [HideInInspector] public SharedSpatialAnchorCore spatialAnchorCore; // Reference to the shared spatial anchor core component.
     [HideInInspector] public Transform anchorTransform, sceneParent; // Parent transform for instantiated scene objects.
-    [HideInInspector] public GameObject loadingText;    // Loading text object.
     [HideInInspector] public bool isRemote, isConnected, isJoiningAsClient;  // Networking state flags.
     [HideInInspector] public float heightCalibrationOffset = 0f; // Y-offset calculated from local floor vs host floor
     [HideInInspector] public PlayerRef _previousMasterClient = PlayerRef.None; // Previous master client reference.
@@ -127,10 +136,7 @@ public class MUES_Networking : MonoBehaviour
         spatialAnchorCore.OnSharedSpatialAnchorsLoadCompleted.AddListener(OnSceneSetupCompleteAfterJoin);
         spatialAnchorCore.OnAnchorCreateCompleted.AddListener(SaveAndShareAnchor);
 
-        loadingText = GameObject.Find("LoadingText");
-        loadingText.SetActive(false);
-
-        depthIndex = FindFirstObjectByType<SpriteRenderer>();
+        depthIndex = transform.parent.GetComponentInChildren<SpriteRenderer>();
     }
 
     private void Update()
@@ -139,13 +145,9 @@ public class MUES_Networking : MonoBehaviour
         depthIndex.gameObject.SetActive(isInitalizingRoomCreation);
         UpdateSceneParent();
 
-        if (!loadingText.activeSelf && !depthIndex.gameObject.activeSelf) return;
-
         Vector3 camForwardFlat = Vector3.ProjectOnPlane(mainCam.transform.forward, Vector3.up).normalized;
         Vector3 camPos = mainCam.transform.position;
 
-        if (loadingText.activeSelf) 
-            loadingText.transform.position = camPos + camForwardFlat * 0.5f;
         if (depthIndex.gameObject.activeSelf) 
             depthIndex.transform.position = camPos + camForwardFlat * 0.7f;
     }
@@ -448,16 +450,16 @@ public class MUES_Networking : MonoBehaviour
         ConsoleMessage.Send(debugMode, $"QR payload: {qrPayload}", Color.cyan);
 
         WWWForm form = new();
-        form.AddField("token", "YOUR_TOKEN");
+        form.AddField("token", qrSendToken);
         form.AddField("data", qrPayload);
 
-        using UnityWebRequest www = UnityWebRequest.Post("YOUR_DOMAIN/mues/setqr.php", form);
+        using UnityWebRequest www = UnityWebRequest.Post(qrSetDomain, form);
         yield return www.SendWebRequest();
 
         if (www.result == UnityWebRequest.Result.Success)
         {
 #if UNITY_EDITOR
-            if (popUpQRCode) Application.OpenURL("YOUR_DOMAIN");
+            if (popUpQRCode) Application.OpenURL(qrDisplayDomain);
 #endif
             ConsoleMessage.Send(debugMode, "QR-Request sent successfully.", Color.green);
         }

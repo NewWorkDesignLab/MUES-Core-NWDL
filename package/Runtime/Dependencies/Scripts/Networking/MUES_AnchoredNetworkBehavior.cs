@@ -39,9 +39,12 @@ public abstract class MUES_AnchoredNetworkBehaviour : NetworkBehaviour
         {
             if (net.isRemote)
             {
-                anchor = MUES_RoomVisualizer.Instance?.virtualRoom?.transform;
-                if (anchor != null)
+                var virtualRoom = MUES_RoomVisualizer.Instance?.virtualRoom;
+                if (virtualRoom != null)
+                {
+                    anchor = virtualRoom.transform;
                     ConsoleMessage.Send(true, $"AnchoredNetworkBehavior - Remote client using virtualRoom as anchor: {anchor.name} at {anchor.position}, rot: {anchor.rotation.eulerAngles}", Color.cyan);
+                }
             }
             else
             {

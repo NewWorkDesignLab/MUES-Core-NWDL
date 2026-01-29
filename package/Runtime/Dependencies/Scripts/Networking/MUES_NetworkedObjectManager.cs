@@ -15,13 +15,11 @@ public class MUES_NetworkedObjectManager : MonoBehaviour
     [Tooltip("Enable to see debug messages in the console.")]
     public bool debugMode;
 
-    private readonly string serverUrl = "YOUR_DOMAIN/mues_models";    // Base URL for model downloads
-
     private readonly Dictionary<string, Task<string>> _activeDownloads = new Dictionary<string, Task<string>>();    // Tracks active model download tasks
 
     private readonly System.Threading.SemaphoreSlim _instantiationSemaphore = new System.Threading.SemaphoreSlim(1, 1); // Semaphore to limit concurrent instantiations
 
-    public static MUES_NetworkedObjectManager Instance { get; private set; }    // Singleton instance
+    public static MUES_NetworkedObjectManager Instance { get; private set; }
 
     private void Awake()
     {
@@ -30,7 +28,7 @@ public class MUES_NetworkedObjectManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Instantiates a networked model at a position in front of the main camera. (HOST ONLY)
+    /// Instantiates a networked model at a position in front of the main camera. For remote clients, the position is converted relative to the virtualRoom anchor.
     /// </summary>
     public void Instantiate(MUES_NetworkedTransform modelToInstantiate, Vector3 position, Quaternion rotation, out MUES_NetworkedTransform instantiatedModel)
     {
@@ -39,17 +37,40 @@ public class MUES_NetworkedObjectManager : MonoBehaviour
         var net = MUES_Networking.Instance;
         bool isChairPlacement = MUES_RoomVisualizer.Instance != null && MUES_RoomVisualizer.Instance.chairPlacementActive;
 
-        if (!isChairPlacement && (!net.isConnected || net.isRemote))
+        if (!isChairPlacement && !net.isConnected)
         {
-            ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Not connected / remote client - cannot instantiate networked models.", Color.yellow);
+            ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Not connected - cannot instantiate networked models.", Color.yellow);
             return;
         }
 
         var runner = net.Runner;
 
-        ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Instantiate: SpawnPos={position}, isRemote={net.isRemote}", Color.cyan);
+        Vector3 spawnPos = position;
+        Quaternion spawnRot = rotation;
 
-        var spawnedNetworkObject = runner.Spawn(modelToInstantiate, position, rotation, runner.LocalPlayer);
+        if (net.isRemote)
+        {
+            var virtualRoom = MUES_RoomVisualizer.Instance?.virtualRoom;
+
+            if (virtualRoom != null)
+                ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Remote client spawn: worldPos={position}, virtualRoom.pos={virtualRoom.transform.position}, sceneParent.pos={net.sceneParent?.position}", Color.cyan);
+            else
+            {
+                ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Remote client has no virtualRoom yet - spawn position may be incorrect!", Color.red);
+                return;
+            }
+        }
+        else
+        {
+            if (net.sceneParent == null)
+                ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Colocated client has no sceneParent - spawn position may be incorrect!", Color.yellow);
+            else
+                ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Colocated client spawning at pos: {spawnPos}, sceneParent.pos={net.sceneParent.position}", Color.cyan);
+        }
+
+        ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Instantiate: SpawnPos={spawnPos}, isRemote={net.isRemote}", Color.cyan);
+
+        var spawnedNetworkObject = runner.Spawn(modelToInstantiate, spawnPos, spawnRot, runner.LocalPlayer);
 
         if (spawnedNetworkObject != null)
             instantiatedModel = spawnedNetworkObject.GetComponent<MUES_NetworkedTransform>();
@@ -58,15 +79,15 @@ public class MUES_NetworkedObjectManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Spawns a networked container that will load the GLB model on all clients.
+    /// Spawns a networked container that will load the GLB model on all clients. For non-master clients, this sends a request to the host to spawn the model.
     /// </summary>
     public void InstantiateFromServer(string modelFileName, Vector3 position, Quaternion rotation, bool makeGrabbable, bool spawnerGrabOnly = false)
     {
         var net = MUES_Networking.Instance;
 
-        if (!net.isConnected || net.isRemote)
+        if (!net.isConnected)
         {
-            ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Not connected / remote client - cannot instantiate networked models.", Color.yellow);
+            ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Not connected - cannot instantiate networked models.", Color.yellow);
             return;
         }
 
@@ -82,15 +103,38 @@ public class MUES_NetworkedObjectManager : MonoBehaviour
         Vector3 spawnPos = position;
         Quaternion spawnRot = rotation;
 
-        if (net.sceneParent != null)
+        Transform anchorReference = null;
+        
+        if (net.isRemote)
         {
-            spawnPos = net.sceneParent.InverseTransformPoint(position);
-            spawnRot = Quaternion.Inverse(net.sceneParent.rotation) * rotation;
-            ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Client converting spawn: pos {position} -> {spawnPos}, rot {rotation.eulerAngles} -> {spawnRot.eulerAngles}", Color.cyan);
+            var virtualRoom = MUES_RoomVisualizer.Instance?.virtualRoom;
+            if (virtualRoom != null)
+            {
+                anchorReference = virtualRoom.transform;
+                ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Remote client using virtualRoom as anchor reference at {anchorReference.position}", Color.cyan);
+            }
+            else
+            {
+                ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Remote client has no virtualRoom - cannot calculate anchor-relative position!", Color.red);
+                return;
+            }
         }
         else
         {
-            ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Client has no sceneParent - sending world position as fallback.", Color.yellow);
+            if (net.sceneParent != null)
+            {
+                anchorReference = net.sceneParent;
+                ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Colocated client using sceneParent as anchor reference at {anchorReference.position}", Color.cyan);
+            }
+            else
+                ConsoleMessage.Send(debugMode, "[MUES_ModelManager] Colocated client has no sceneParent - sending world position as fallback.", Color.yellow);
+        }
+
+        if (anchorReference != null)
+        {
+            spawnPos = anchorReference.InverseTransformPoint(position);
+            spawnRot = Quaternion.Inverse(anchorReference.rotation) * rotation;
+            ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Client converting spawn: pos {position} -> {spawnPos}, rot {rotation.eulerAngles} -> {spawnRot.eulerAngles}", Color.cyan);
         }
 
         if (MUES_SessionMeta.Instance != null)
@@ -175,7 +219,7 @@ public class MUES_NetworkedObjectManager : MonoBehaviour
             TryDeleteFile(filePath);
         }
 
-        string url = $"{serverUrl}{modelFileName}";
+        string url = $"{MUES_Networking.Instance.modelDownloadDomain}{modelFileName}";
 
         using UnityWebRequest uwr = new UnityWebRequest(url, UnityWebRequest.kHttpVerbGET);
         uwr.downloadHandler = new DownloadHandlerFile(tempFilePath);
