@@ -10,8 +10,6 @@ public class MUES_NetworkedObjectManager : MonoBehaviour
     [Header("Model Loading Settings")]
     [Tooltip("The networked container prefab used to load GLB models.")]
     public NetworkObject loadedModelContainer;
-    [Tooltip("A test model prefab used for instantiation testing.")]
-    public MUES_NetworkedTransform testModelPrefab;
     [Tooltip("Enable to see debug messages in the console.")]
     public bool debugMode;
 

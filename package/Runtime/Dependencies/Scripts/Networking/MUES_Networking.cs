@@ -799,11 +799,6 @@ public class MUES_Networking : MonoBehaviour
 
         if (isRemote) OnRemoteClientJoined?.Invoke(player);
         else OnColocatedClientJoined?.Invoke(player);
-
-        // --- OBJECT INSTANTIATION TESTING - CLIENT ---
-        //var (spawnPos, spawnRot) = GetSpawnPoseInFrontOfCamera(0.75f);
-        //MUES_NetworkedObjectManager.Instance.Instantiate(MUES_NetworkedObjectManager.Instance.testModelPrefab, spawnPos, spawnRot, out _);
-        // ---
     }
 
     /// <summary>
