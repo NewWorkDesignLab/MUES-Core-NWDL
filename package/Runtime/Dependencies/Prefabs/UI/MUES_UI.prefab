@@ -581,7 +581,7 @@ Transform:
   m_GameObject: {fileID: 1235706911648903902}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 0, y: 0, z: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -610,8 +610,8 @@ MonoBehaviour:
   containerRescan: {fileID: 2027983637520226182}
   playerButtonPrefab: {fileID: 38863716849440313, guid: 78090eda2324b364d874dea2b0b745d3, type: 3}
   contentParent: {fileID: 2888571929790508600}
-  cubeBlue: {fileID: 0}
-  cubeRed: {fileID: 0}
+  cubeBlue: {fileID: 5485392940694735803, guid: 3c578fb4802d2b54894b43ebe8f277e2, type: 3}
+  cubeRed: {fileID: 5485392940694735803, guid: e1d176c5eecf7d54da1f7aa6972837c0, type: 3}
 --- !u!114 &8331595491571539035
 MonoBehaviour:
   m_ObjectHideFlags: 0

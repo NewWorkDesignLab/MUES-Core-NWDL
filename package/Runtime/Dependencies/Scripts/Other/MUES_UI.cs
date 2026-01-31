@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using static Fusion.Sockets.NetBitBuffer;
 
 public class MUES_UI : MonoBehaviour
 {
@@ -189,7 +190,26 @@ public class MUES_UI : MonoBehaviour
         };
     }
 
-    void Update() => disconnectButton.interactable = MUES_Networking.Instance.isConnected;
+    void Update()
+    {
+        ManageDisplayPosition(transform);
+        disconnectButton.interactable = MUES_Networking.Instance.isConnected;
+    }
+
+    /// <summary>
+    /// Manages the position of the display UI to stay in front of the user.
+    /// </summary>
+    public void ManageDisplayPosition(Transform displayTransform)
+    {
+        if (Camera.main == null)
+            return;
+
+        Vector3 forwardProjected = Vector3.ProjectOnPlane(Camera.main.transform.forward, Vector3.up).normalized;
+        Vector3 targetPosition = Camera.main.transform.position + forwardProjected * 2f;
+        targetPosition.y = Camera.main.transform.position.y - 5f;
+
+        displayTransform.position = Vector3.Lerp(displayTransform.position, targetPosition, Time.deltaTime * .5f);
+    }
 
     #region Container Setups
 
@@ -247,9 +267,7 @@ public class MUES_UI : MonoBehaviour
         spawnButton = containerJoined.GetComponentInChildren<Button>();
         spawnButton.onClick.AddListener(() =>
         {
-            Vector3 position = GetSpawnPoseInFrontOfCamera(1.0f).position;
-            Quaternion rotation = GetSpawnPoseInFrontOfCamera(1.0f).rotation;
-
+            var (position, rotation) = GetSpawnPoseInFrontOfCamera(1.0f);
             MUES_NetworkedObjectManager.Instance.Instantiate(objectToSpawn, position, rotation, out _);
         });
     }
