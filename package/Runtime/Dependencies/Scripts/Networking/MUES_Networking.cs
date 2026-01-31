@@ -185,6 +185,14 @@ public class MUES_Networking : MonoBehaviour
     /// </summary>
     public event Action<bool> OnQRCodeScanningStateChanged;
 
+    /// <summary>
+    /// Invokes the OnPlayerJoined event for the specified player.
+    /// </summary>
+    public void InvokeOnPlayerJoined(PlayerRef player)
+    {
+        OnPlayerJoined?.Invoke(player);
+    }
+
     #endregion
 
     private void Awake()
@@ -988,20 +996,6 @@ public class MUES_Networking : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets a spawn position and rotation in front of the main camera.
-    /// </summary>
-    private (Vector3 position, Quaternion rotation) GetSpawnPoseInFrontOfCamera(float distance)
-    {
-        Vector3 camPos = mainCam.transform.position;
-        Vector3 flatForward = Vector3.ProjectOnPlane(mainCam.transform.forward, Vector3.up).normalized;
-
-        if (flatForward.sqrMagnitude < 0.001f)
-            flatForward = Vector3.forward;
-
-        return (camPos + flatForward * distance, Quaternion.LookRotation(flatForward, Vector3.up));
-    }
-
-    /// <summary>
     /// Calculates a floor-aligned position from a transform, using the tracking space Y if available.
     /// </summary>
     public static Vector3 GetFloorAlignedPosition(Transform sourceTransform, float? overrideY = null)
@@ -1446,6 +1440,9 @@ public class MUES_Networking : MonoBehaviour
         isConnected = isCreatingRoom = isJoiningAsClient = false;
         isRemote = false;
 
+        // Clear local mute list when leaving room
+        ClearLocalMuteList();
+
         ConfigureCamera();
         MUES_RoomVisualizer.Instance.HideSceneWhileLoading(false);
         MUES_RoomVisualizer.Instance.chairCount = 0;
@@ -1465,6 +1462,9 @@ public class MUES_Networking : MonoBehaviour
     #endregion
 
     #region Player Management
+
+    // Local mute list - each player manages their own muted players locally
+    private HashSet<PlayerRef> locallyMutedPlayers = new HashSet<PlayerRef>();
 
     /// <summary>
     /// Gets a list of all connected players in the session.
@@ -1501,23 +1501,26 @@ public class MUES_Networking : MonoBehaviour
     }
 
     /// <summary>
-    /// Toggles the mute state for a player by their PlayerRef.
+    /// Toggles the local mute state for a player by their PlayerRef.
     /// </summary>
     public void ToggleMutePlayer(PlayerRef playerRef)
     {
-        var playerObject = Runner?.GetPlayerObject(playerRef);
-        var avatar = playerObject != null ? playerObject.GetComponent<MUES_AvatarMarker>() : null;
-
-        if (avatar != null)
-            SetMuteStatusForPlayer(playerRef, !avatar.IsMuted);
-        else
-            ConsoleMessage.Send(debugMode, $"Cannot toggle mute for player {playerRef} - avatar not found.", Color.red);
+        bool currentlyMuted = IsPlayerLocallyMuted(playerRef);
+        SetLocalMuteStatusForPlayer(playerRef, !currentlyMuted);
     }
 
     /// <summary>
-    /// Mutes or unmutes a player by their PlayerRef. Only remote players can be muted.
+    /// Checks if a player is locally muted by this user.
     /// </summary>
-    public void SetMuteStatusForPlayer(PlayerRef playerRef, bool mute)
+    public bool IsPlayerLocallyMuted(PlayerRef playerRef)
+    {
+        return locallyMutedPlayers.Contains(playerRef);
+    }
+
+    /// <summary>
+    /// Locally mutes or unmutes a player by their PlayerRef.
+    /// </summary>
+    public void SetLocalMuteStatusForPlayer(PlayerRef playerRef, bool mute)
     {
         if (playerRef == Runner?.LocalPlayer)
         {
@@ -1534,17 +1537,18 @@ public class MUES_Networking : MonoBehaviour
             return;
         }
 
-        if (!avatar.IsRemote)
-        {
-            ConsoleMessage.Send(debugMode, $"Cannot mute player \"{avatar.PlayerName}\" - only remote players can be muted.", Color.yellow);
-            return;
-        }
+        if (mute) locallyMutedPlayers.Add(playerRef);
+        else locallyMutedPlayers.Remove(playerRef);
 
-        MUES_SessionMeta.Instance.SetPlayerMuted(playerRef, mute);
-        avatar.voiceAudioSource.mute = mute;
+        avatar.SetLocallyMuted(mute);
 
-        ConsoleMessage.Send(true, $"Player \"{avatar.PlayerName}\" has been {(mute ? "muted" : "unmuted")}.", Color.cyan);
+        ConsoleMessage.Send(true, $"Player \"{avatar.PlayerName}\" has been locally {(mute ? "muted" : "unmuted")}.", Color.cyan);
     }
+
+    /// <summary>
+    /// Clears all locally muted players.
+    /// </summary>
+    public void ClearLocalMuteList() => locallyMutedPlayers.Clear();
 
     #endregion
 }

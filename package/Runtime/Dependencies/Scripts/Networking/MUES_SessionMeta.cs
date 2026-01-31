@@ -231,25 +231,6 @@ public class MUES_SessionMeta : NetworkBehaviour
         return null;
     }
 
-    /// <summary>
-    /// Sets the muted state for a player by finding their avatar marker.
-    /// </summary>
-    public void SetPlayerMuted(PlayerRef playerRef, bool muted)
-    {
-        var avatars = FindObjectsByType<MUES_AvatarMarker>(FindObjectsSortMode.None);
-
-        foreach (var avatar in avatars)
-        {
-            if (avatar.Object.InputAuthority == playerRef)
-            {
-                avatar.SetMuted(muted);
-                return;
-            }
-        }
-
-        ConsoleMessage.Send(true, $"[SessionMeta] Could not find avatar for player {playerRef} to set mute state.", Color.yellow);
-    }
-
     #endregion
 
     #region Data Compression Helpers

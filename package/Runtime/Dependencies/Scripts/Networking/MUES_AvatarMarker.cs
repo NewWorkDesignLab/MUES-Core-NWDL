@@ -23,8 +23,8 @@ public class MUES_AvatarMarker : MUES_AnchoredNetworkBehaviour
 
     [HideInInspector][Networked] public NetworkBool IsHmdMounted { get; set; } = true; // Default to true so avatars are visible by default
     [HideInInspector][Networked] public NetworkBool IsStabilizing { get; set; } = false; // True while avatar is stabilizing after HMD mount
-    [HideInInspector][Networked, OnChangedRender(nameof(OnMutedChanged))] public NetworkBool IsMuted { get; set; } = false; // True if this player is muted
-    [HideInInspector][Networked] public NetworkBool IsMutedByHost { get; set; } = false; // True if this player was muted by the host (persistent mute)
+    
+    [HideInInspector] public bool IsLocallyMuted { get; private set; } = false; // True if this player is locally muted by the viewing user (not networked)
 
     [HideInInspector][Networked] public Vector3 HeadLocalPos { get; set; }  // Local position of the head relative to the avatar marker
     [HideInInspector][Networked] public Quaternion HeadLocalRot { get; set; }   // Local rotation of the head relative to the avatar marker
@@ -93,7 +93,7 @@ public class MUES_AvatarMarker : MUES_AnchoredNetworkBehaviour
             StartCoroutine(DelayedHMDMountVisibility());
             UpdateAfkMarker();
 
-            if (!IsMutedByHost && voiceRecorder != null)
+            if (voiceRecorder != null)
             {
                 voiceRecorder.TransmitEnabled = true;
                 ConsoleMessage.Send(debugMode, "HMD Mounted - Microphone unmuted.", Color.cyan);
@@ -784,47 +784,15 @@ public class MUES_AvatarMarker : MUES_AnchoredNetworkBehaviour
     }
 
     /// <summary>
-    /// Sets the muted state for this avatar. Only callable with state authority.
+    /// Sets the locally muted state for this avatar. This only affects the local user's audio playback.
     /// </summary>
-    public void SetMuted(bool muted)
+    public void SetLocallyMuted(bool muted)
     {
-        if (!Object.HasStateAuthority)
-        {
-            RPC_RequestSetMuted(muted);
-            return;
-        }
-
-        IsMuted = muted;
-        IsMutedByHost = muted;
-
-        ApplyMutedState();
-        ConsoleMessage.Send(debugMode, $"Avatar - {PlayerName} muted by host: {muted}", Color.cyan);
-    }
-
-    /// <summary>
-    /// RPC to request mute state change from clients without state authority.
-    /// </summary>
-    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    private void RPC_RequestSetMuted(bool muted) => SetMuted(muted);
-
-    /// <summary>
-    /// Called when IsMuted networked property changes.
-    /// </summary>
-    private void OnMutedChanged() => ApplyMutedState();
-
-    /// <summary>
-    /// Applies the muted state to the voice audio source and recorder.
-    /// </summary>
-    private void ApplyMutedState()
-    {
+        IsLocallyMuted = muted;
+        
         if (voiceAudioSource != null)
-            voiceAudioSource.mute = IsMuted || Object.HasInputAuthority;
+            voiceAudioSource.mute = muted;
 
-        if (Object.HasInputAuthority && voiceRecorder != null)
-        {
-            bool canTransmit = !IsMutedByHost && IsHmdMounted;
-            voiceRecorder.TransmitEnabled = canTransmit;
-            ConsoleMessage.Send(debugMode, $"Avatar - Transmit enabled: {canTransmit} (MutedByHost: {IsMutedByHost}, HmdMounted: {IsHmdMounted})", Color.cyan);
-        }
+        ConsoleMessage.Send(debugMode, $"Avatar - {PlayerName} locally muted: {muted}", Color.cyan);
     }
 }

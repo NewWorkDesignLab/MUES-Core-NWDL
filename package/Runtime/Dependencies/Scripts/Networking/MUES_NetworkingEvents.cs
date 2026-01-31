@@ -61,20 +61,24 @@ public class MUES_NetworkingEvents : MonoBehaviour, INetworkRunnerCallbacks
         var net = MUES_Networking.Instance;
 
         if (runner.IsSharedModeMasterClient) net._previousMasterClient = runner.LocalPlayer;  
-        if (player != runner.LocalPlayer) return;
-    
-        if (runner.IsSharedModeMasterClient)
+        
+        // Handle local player joining
+        if (player == runner.LocalPlayer)
         {
-            if (net.isJoiningAsClient)
+            if (runner.IsSharedModeMasterClient)
             {
-                ConsoleMessage.Send(debugMode, "ERROR: Joined as Master but expected Client (Room not found?). Leaving.", Color.red);
-                net.LeaveRoom();
-                return;
-            }
+                if (net.isJoiningAsClient)
+                {
+                    ConsoleMessage.Send(debugMode, "ERROR: Joined as Master but expected Client (Room not found?). Leaving.", Color.red);
+                    net.LeaveRoom();
+                    return;
+                }
             
-            net.HandleHostJoin(player);
+                net.HandleHostJoin(player);
+            }
+            else net.StartCoroutine(net.HandleNonHostJoin(player));
         }
-        else net.StartCoroutine(net.HandleNonHostJoin(player));
+        else net.InvokeOnPlayerJoined(player);
     }
 
     /// <summary>
@@ -83,6 +87,10 @@ public class MUES_NetworkingEvents : MonoBehaviour, INetworkRunnerCallbacks
     public virtual void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
     {
         ConsoleMessage.Send(debugMode, $"Player {player} left.", Color.yellow);
+        
+        if (MUES_SessionMeta.Instance != null && MUES_SessionMeta.Instance.Object != null && MUES_SessionMeta.Instance.Object.IsValid)
+            MUES_SessionMeta.Instance.UnregisterPlayer(player);
+        
         MUES_Networking.Instance.CheckIfNewMaster(player);
     }   
 

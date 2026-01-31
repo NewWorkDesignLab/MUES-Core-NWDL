@@ -1,3 +1,5 @@
+using Fusion;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -20,21 +22,37 @@ public class MUES_UI : MonoBehaviour
     [Tooltip("Container shown when the user is prompted to rescan")]
     public GameObject containerRescan;
 
-    private GameObject currentContainer;
+    [Header("Player List UI")]
+    [Tooltip("Prefab for player buttons in the player list UI")]
+    public GameObject playerButtonPrefab; 
+    [Tooltip("Parent RectTransform for player buttons")]
+    public RectTransform contentParent;
 
-    private Button disconnectButton;
-    private Button hostButton, joinButton;
+    [Header("Networked Objects")]
+    [Tooltip("Networked Transform for the blue cube. (Everybody can grab)")]
+    public MUES_NetworkedTransform cubeBlue; 
+    [Tooltip("Networked Transform for the red cube. (Only spawner can grab)")]
+    public MUES_NetworkedTransform cubeRed;
 
-    private InputField codeInput;
-    private Button codeSubmitButton;
+    private GameObject currentContainer;    // Currently active container
 
-    private TextMeshProUGUI codeDisplayText;
+    private Button disconnectButton;    // Button to disconnect from the room
+    private Button hostButton, joinButton;  // Buttons in the main container
 
-    private Button okButtonDisconnected;
-    private Button okButtonRescan;
-    private Button rescanButton;
+    private InputField codeInput;   // Input field for entering room code
+    private Button codeSubmitButton;    // Button to submit room code
 
-    private TextMeshProUGUI adviceText;
+    private Dictionary<PlayerRef, GameObject> playerButtons = new();  // Stores references to player buttons by PlayerRef
+    private List<Button> playerKickButtons = new(); // Stores references to player control buttons
+
+    private Button spawnButton; // Button to spawn an object
+    private MUES_NetworkedTransform objectToSpawn; // The networked object to spawn
+    private TextMeshProUGUI codeDisplayText;    // Text to display the room code
+
+    private Button okButtonDisconnected, okButtonRescan;    // OK buttons in various containers
+    private Button rescanButton;    // Rescan button in the rescan container
+
+    private TextMeshProUGUI adviceText; // Text for advice container
 
     void Start()
     {
@@ -57,8 +75,6 @@ public class MUES_UI : MonoBehaviour
 
     private void OnEnable()
     {
-        // Networking events    
-
         MUES_Networking.Instance.OnLobbyCreationStarted += () =>
         {
             SwitchToContainer(containerLoading);
@@ -79,22 +95,18 @@ public class MUES_UI : MonoBehaviour
             codeDisplayText.text = $"Lobby Code: {roomCode}";
         };
 
-        MUES_Networking.Instance.OnHostJoined += (playerRef) =>
+        MUES_Networking.Instance.OnPlayerJoined += (playerRef) =>
         {
+            if (MUES_Networking.Instance.Runner != null && playerRef != MUES_Networking.Instance.Runner.LocalPlayer)
+                AddPlayerToList(playerRef);
+
             UpdateJoinContainerPermissions();
             SwitchToContainer(containerJoined);
         };
 
-        MUES_Networking.Instance.OnColocatedClientJoined += (playerRef) =>
+        MUES_Networking.Instance.OnPlayerLeft += (playerRef) =>
         {
-            UpdateJoinContainerPermissions();
-            SwitchToContainer(containerJoined);
-        };
-
-        MUES_Networking.Instance.OnRemoteClientJoined += (playerRef) =>
-        {
-            UpdateJoinContainerPermissions();
-            SwitchToContainer(containerJoined);
+            RemovePlayerFromList(playerRef);
         };
 
         MUES_Networking.Instance.OnBecameMasterClient += () =>
@@ -106,8 +118,6 @@ public class MUES_UI : MonoBehaviour
         {
             SwitchToContainer(containerDisconnected);
         };
-
-        // Room visualizer events
 
         MUES_RoomVisualizer.Instance.OnChairPlacementStarted += () =>
         {
@@ -123,14 +133,69 @@ public class MUES_UI : MonoBehaviour
 
     private void OnDisable()
     {
-        
+        MUES_Networking.Instance.OnLobbyCreationStarted -= () =>
+        {
+            SwitchToContainer(containerLoading);
+        };
+
+        MUES_Networking.Instance.OnRoomMeshLoadFailed -= () =>
+        {
+            SwitchToContainer(containerRescan);
+        };
+
+        MUES_Networking.Instance.OnRoomCreationFailed -= () =>
+        {
+            SwitchToContainer(containerDisconnected);
+        };
+
+        MUES_Networking.Instance.OnRoomCreatedSuccessfully -= (roomCode) =>
+        {
+            codeDisplayText.text = $"Lobby Code: {roomCode}";
+        };
+
+        MUES_Networking.Instance.OnPlayerJoined -= (playerRef) =>
+        {
+            if (MUES_Networking.Instance.Runner != null && playerRef != MUES_Networking.Instance.Runner.LocalPlayer)
+                AddPlayerToList(playerRef);
+
+            UpdateJoinContainerPermissions();
+            SwitchToContainer(containerJoined);
+        };
+
+        MUES_Networking.Instance.OnPlayerLeft -= (playerRef) =>
+        {
+            RemovePlayerFromList(playerRef);
+        };
+
+        MUES_Networking.Instance.OnBecameMasterClient -= () =>
+        {
+            UpdateJoinContainerPermissions();
+        };
+
+        MUES_Networking.Instance.OnRoomLeft -= () =>
+        {
+            SwitchToContainer(containerDisconnected);
+        };
+
+        MUES_RoomVisualizer.Instance.OnChairPlacementStarted -= () =>
+        {
+            adviceText.text = "Press the PRIMARY TRIGGER to place a chair.\nPress A to end the chair placement.";
+            SwitchToContainer(containerAdvice);
+        };
+
+        MUES_RoomVisualizer.Instance.OnChairPlacementEnded -= () =>
+        {
+            SwitchToContainer(containerLoading);
+        };
     }
 
-    void Update()
-    {
-        disconnectButton.interactable = MUES_Networking.Instance.isConnected;
-    }
+    void Update() => disconnectButton.interactable = MUES_Networking.Instance.isConnected;
 
+    #region Container Setups
+
+    /// <summary>
+    /// Sets up the main container UI and button functionality.
+    /// </summary>
     void SetupMainContainer()
     {
         Button[] buttons = containerMain.GetComponentsInChildren<Button>();
@@ -152,6 +217,9 @@ public class MUES_UI : MonoBehaviour
         });
     }
 
+    /// <summary>
+    /// Sets up the enter scan container UI and button functionality.
+    /// </summary>
     void SetupEnterScanContainer()
     {
         codeInput = containerEnterScan.GetComponentInChildren<InputField>();
@@ -160,6 +228,7 @@ public class MUES_UI : MonoBehaviour
         codeSubmitButton.onClick.AddListener(() =>
         {
             string code = codeInput.text;
+
             if (!string.IsNullOrEmpty(code))
             {
                 MUES_Networking.Instance.JoinSessionFromCode(code);
@@ -168,11 +237,26 @@ public class MUES_UI : MonoBehaviour
         });
     }
 
+    /// <summary>
+    /// Sets up the joined container UI.
+    /// </summary>
     void SetupJoinedContainer()
     {
         codeDisplayText = containerJoined.GetComponentInChildren<TextMeshProUGUI>();
+
+        spawnButton = containerJoined.GetComponentInChildren<Button>();
+        spawnButton.onClick.AddListener(() =>
+        {
+            Vector3 position = GetSpawnPoseInFrontOfCamera(1.0f).position;
+            Quaternion rotation = GetSpawnPoseInFrontOfCamera(1.0f).rotation;
+
+            MUES_NetworkedObjectManager.Instance.Instantiate(objectToSpawn, position, rotation, out _);
+        });
     }
 
+    /// <summary>
+    /// Sets up the disconnected container UI and button functionality.
+    /// </summary>
     void SetupDisconnectedContainer()
     {
         okButtonDisconnected = containerDisconnected.GetComponentInChildren<Button>();
@@ -182,6 +266,9 @@ public class MUES_UI : MonoBehaviour
         });
     }
 
+    /// <summary>
+    /// Sets up the rescan container UI and button functionality.
+    /// </summary>
     void SetupRescanContainer()
     {
         Button[] buttons = containerMain.GetComponentsInChildren<Button>();
@@ -201,6 +288,13 @@ public class MUES_UI : MonoBehaviour
         });
     }
 
+    #endregion
+
+    #region Container Switching and Player List Management
+
+    /// <summary>
+    /// Switches the active UI container to the specified new container.
+    /// </summary>
     void SwitchToContainer(GameObject newContainer)
     {
         currentContainer.SetActive(false);
@@ -209,8 +303,98 @@ public class MUES_UI : MonoBehaviour
         currentContainer.SetActive(true);
     }
 
+    /// <summary>
+    /// Updates the permissions of the join container based on whether the local player is the master client.
+    /// </summary>
     void UpdateJoinContainerPermissions()
     {
+        bool isMasterClient = MUES_Networking.Instance.Runner != null && MUES_Networking.Instance.Runner.IsSharedModeMasterClient;
 
+        objectToSpawn = isMasterClient ? cubeRed : cubeBlue;    
+        spawnButton.GetComponentInChildren<TextMeshProUGUI>().text = isMasterClient ? $"Spawn\r\n<color=red>Red</color>\r\nCube" : $"Spawn\r\n<color=blue>Blue</color>\r\nCube";
+
+        playerKickButtons.RemoveAll(button => button == null);
+                
+        foreach (var button in playerKickButtons)
+        {
+            if (button != null)
+                button.interactable = isMasterClient;
+        }
     }
+
+    /// <summary>
+    /// Creates a button for a player in the UI list.
+    /// </summary>
+    void CreateButton(PlayerInfo player)
+    {
+        var button = Instantiate(playerButtonPrefab, contentParent);
+        playerButtons[player.PlayerRef] = button;
+
+        button.GetComponentInChildren<TextMeshProUGUI>().text = player.PlayerName.ToString();
+
+        Button muteButton = button.transform.Find("MuteButton").GetComponent<Button>();
+        muteButton.onClick.AddListener(() => { MUES_Networking.Instance.ToggleMutePlayer(player.PlayerRef); ToggleMuteVisual(muteButton, player.PlayerRef); });
+
+        Button kickButton = button.transform.Find("KickButton").GetComponent<Button>();
+        kickButton.onClick.AddListener(() => { MUES_Networking.Instance.KickPlayer(player.PlayerRef); });
+
+        kickButton.interactable = MUES_Networking.Instance.Runner.IsSharedModeMasterClient;
+        playerKickButtons.Add(kickButton);
+    }
+
+    /// <summary>
+    /// Function to add a player to the UI list when they join. (Call in OnPlayerJoined callback in MUES_NetworkingEvents)  
+    /// </summary>
+    public void AddPlayerToList(PlayerRef player)
+    {
+        PlayerInfo? playerInfo = MUES_Networking.Instance.GetPlayer(player);
+        if (playerInfo.HasValue) CreateButton(playerInfo.Value);
+    }
+
+    /// <summary>
+    /// Function to remove a player from the UI list when they leave. (Call in OnPlayerLeft callback in MUES_NetworkingEvents)
+    /// </summary>
+    public void RemovePlayerFromList(PlayerRef player)
+    {
+        if (playerButtons.TryGetValue(player, out var buttonObj))
+        {
+            if (buttonObj != null)
+            {
+                Button kickButton = buttonObj.transform.Find("KickButton")?.GetComponent<Button>();
+                if (kickButton != null)
+                    playerKickButtons.Remove(kickButton);
+            }
+            
+            Destroy(buttonObj);
+            playerButtons.Remove(player);
+        }
+    }
+
+    /// <summary>
+    /// Example function to toggle mute visual state on the mute button.
+    /// </summary>
+    void ToggleMuteVisual(Button button, PlayerRef playerRef)
+    {
+        bool isMuted = MUES_Networking.Instance.IsPlayerLocallyMuted(playerRef);
+
+        var muteButtonImage = button.image;
+        if (muteButtonImage != null) muteButtonImage.color = isMuted ? Color.red : Color.gray;
+    }
+
+
+    /// <summary>
+    /// Gets a spawn position and rotation in front of the main camera.
+    /// </summary>
+    private (Vector3 position, Quaternion rotation) GetSpawnPoseInFrontOfCamera(float distance)
+    {
+        Vector3 camPos = Camera.main.transform.position;
+        Vector3 flatForward = Vector3.ProjectOnPlane(Camera.main.transform.forward, Vector3.up).normalized;
+
+        if (flatForward.sqrMagnitude < 0.001f)
+            flatForward = Vector3.forward;
+
+        return (camPos + flatForward * distance, Quaternion.LookRotation(flatForward, Vector3.up));
+    }
+
+    #endregion
 }
