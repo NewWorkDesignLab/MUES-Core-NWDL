@@ -16,6 +16,13 @@ namespace MUES.Editor
             "UI/Default",
         };
 
+        private static readonly string[] PrefabSearchPaths = new string[]
+        {
+            "Packages/com.j0nes-l.mues-core",
+            "Assets/MUES-Core",
+            "Assets/MUES"
+        };
+
         [MenuItem("MUES/Shaders/Add Required Shaders")]
         public static void AddRequiredShaders()
         {
@@ -47,9 +54,22 @@ namespace MUES.Editor
                 Debug.Log($"[MUES] Added: {shaderName}");
             }
 
-            string[] prefabGuids = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/MUES-Core" });
-            
-            foreach (string guid in prefabGuids)
+            var allPrefabGuids = new List<string>();
+            foreach (string searchPath in PrefabSearchPaths)
+            {
+                if (!AssetDatabase.IsValidFolder(searchPath)) continue;
+
+                string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { searchPath });
+                allPrefabGuids.AddRange(guids);
+                Debug.Log($"[MUES] Found {guids.Length} prefabs in: {searchPath}");
+            }
+
+            if (allPrefabGuids.Count == 0)
+            {
+                Debug.LogWarning("[MUES] No prefabs found in any search path. Searched: " + string.Join(", ", PrefabSearchPaths));
+            }
+
+            foreach (string guid in allPrefabGuids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
