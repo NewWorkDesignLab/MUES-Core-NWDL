@@ -12,6 +12,8 @@ namespace MUES.Core
         [Header("Model Loading Settings")]
         [Tooltip("The networked container prefab used to load GLB models.")]
         public NetworkObject loadedModelContainer;
+        [Tooltip("The API key used for authenticating model download requests.")]
+        public string modelApiKey;
         [Tooltip("Enable to see debug messages in the console.")]
         public bool debugMode;
 
@@ -219,7 +221,10 @@ namespace MUES.Core
                 TryDeleteFile(filePath);
             }
 
-            string url = $"{MUES_Networking.Instance.modelDownloadDomain}{modelFileName}";
+            string baseUrl = MUES_Networking.Instance.modelDownloadDomain.TrimEnd('/');
+            string url = $"{baseUrl}/{modelFileName}?api_key={modelApiKey}";
+
+            ConsoleMessage.Send(debugMode, $"[MUES_ModelManager] Downloading model from: {url}", Color.cyan);
 
             using UnityWebRequest uwr = new UnityWebRequest(url, UnityWebRequest.kHttpVerbGET);
             uwr.downloadHandler = new DownloadHandlerFile(tempFilePath);
