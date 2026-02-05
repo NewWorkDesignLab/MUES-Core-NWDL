@@ -92,8 +92,8 @@ namespace MUES.Core
 
             if (MUES_RoomVisualizer.Instance != null)
             {
-                MUES_RoomVisualizer.Instance.OnChairPlacementStarted += OnChairPlacementStartedHandler;
-                MUES_RoomVisualizer.Instance.OnChairPlacementEnded += OnChairPlacementEndedHandler;
+                MUES_RoomVisualizer.OnChairPlacementStarted += OnChairPlacementStartedHandler;
+                MUES_RoomVisualizer.OnChairPlacementEnded += OnChairPlacementEndedHandler;
             }
         }
 
@@ -110,8 +110,8 @@ namespace MUES.Core
 
             if (MUES_RoomVisualizer.Instance != null)
             {
-                MUES_RoomVisualizer.Instance.OnChairPlacementStarted -= OnChairPlacementStartedHandler;
-                MUES_RoomVisualizer.Instance.OnChairPlacementEnded -= OnChairPlacementEndedHandler;
+                MUES_RoomVisualizer.OnChairPlacementStarted -= OnChairPlacementStartedHandler;
+                MUES_RoomVisualizer.OnChairPlacementEnded -= OnChairPlacementEndedHandler;
             }
         }
 

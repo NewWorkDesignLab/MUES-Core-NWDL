@@ -844,7 +844,7 @@ namespace MUES.Core
             {
                 bool teleportCompleted = false;
                 Action onTeleportDone = () => teleportCompleted = true;
-                MUES_RoomVisualizer.Instance.OnTeleportCompleted += onTeleportDone;
+                MUES_RoomVisualizer.OnTeleportCompleted += onTeleportDone;
 
                 float teleportTimeout = 10f;
                 float teleportElapsed = 0f;
@@ -855,7 +855,7 @@ namespace MUES.Core
                     yield return null;
                 }
 
-                MUES_RoomVisualizer.Instance.OnTeleportCompleted -= onTeleportDone;
+                MUES_RoomVisualizer.OnTeleportCompleted -= onTeleportDone;
 
                 if (!teleportCompleted)
                     ConsoleMessage.Send(debugMode, "Teleport timeout reached, continuing anyway.", Color.yellow);

@@ -70,37 +70,37 @@ namespace MUES.Core
         /// <summary>
         /// Fired when the loading screen is shown (culling mask updated to hide scene).
         /// </summary>
-        public event Action OnLoadingStarted;
+        public static event Action OnLoadingStarted;
 
         /// <summary>
         /// Fired when the loading screen is hidden (culling mask restored).
         /// </summary>
-        public event Action OnLoadingEnded;
+        public static event Action OnLoadingEnded;
 
         /// <summary>
         /// Fired when chair placement mode is enabled.
         /// </summary>
-        public event Action OnChairPlacementStarted;
+        public static event Action OnChairPlacementStarted;
 
         /// <summary>
         /// Fired when chair placement mode is disabled (room finalized).
         /// </summary>
-        public event Action OnChairPlacementEnded;
+        public static event Action OnChairPlacementEnded;
 
         /// <summary>
         /// Fired when a chair is placed. Provides the chair transform.
         /// </summary>
-        public event Action<Transform> OnChairPlaced;
+        public static event Action<Transform> OnChairPlaced;
 
         /// <summary>
         /// Fired when room geometry rendering is toggled. Provides the render state.
         /// </summary>
-        public event Action<bool> OnRoomGeometryRenderChanged;
+        public static event Action<bool> OnRoomGeometryRenderChanged;
 
         /// <summary>
         /// Fired when the remote client has completed teleporting to a chair (or room center fallback).
         /// </summary>
-        public event Action OnTeleportCompleted;
+        public static event Action OnTeleportCompleted;
 
         #endregion
         private void Awake()
