@@ -190,6 +190,11 @@ namespace MUES.Core
         public static event Action<bool> OnQRCodeScanningStateChanged;
 
         /// <summary>
+        /// Fired when room scanning is finished with positive result.
+        /// </summary>
+        public static event Action OnSpaceSetupCompleted;
+
+        /// <summary>
         /// Invokes the OnPlayerJoined event for the specified player.
         /// </summary>
         public void InvokeOnPlayerJoined(PlayerRef player)
@@ -1029,6 +1034,8 @@ namespace MUES.Core
                 ConsoleMessage.Send(debugMode, $"Space Setup failed: {result}", Color.red);
             else
                 ConsoleMessage.Send(debugMode, "Space Setup completed successfully. - Try restarting the lobby creation process.", Color.green);
+
+            OnSpaceSetupCompleted?.Invoke();
         }
 
         /// <summary>
