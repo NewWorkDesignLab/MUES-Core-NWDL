@@ -75,6 +75,8 @@ namespace MUES.Core
         private string cachedPlayerName; // Locally cached player name for use when network state is unavailable
 
         private bool voiceSetupComplete = false; // Flag to track if voice setup has been completed
+        private bool voiceSetupPending = false; // Flag für verzögertes Voice-Setup
+        private float voiceCheckTimer = 0f; // Timer für periodische Voice-Checks
 
         void OnEnable()
         {
@@ -179,6 +181,8 @@ namespace MUES.Core
             voiceSpeaker = head.GetComponent<Speaker>();
             voiceAudioSource = head.GetComponent<AudioSource>();
 
+            ConsoleMessage.Send(debugMode, $"Avatar - Voice Components found: Recorder={voiceRecorder != null}, Speaker={voiceSpeaker != null}, AudioSource={voiceAudioSource != null}", Color.cyan);
+
             headRenderer.enabled = handRendererR.enabled = handRendererL.enabled = false;
             nameTagCanvasGroup.alpha = 0f;
             
@@ -239,7 +243,7 @@ namespace MUES.Core
                 
                 IsPositionInitialized = true;
                 
-                ConsoleMessage.Send(debugMode, $"Avatar - Local player position initialized at {transform.position}", Color.green);
+                ConsoleMessage.Send(debugMode, $"Avatar - Local player initialized. IsRemote={IsRemote}", Color.green);
             }
             else
             {
@@ -260,7 +264,7 @@ namespace MUES.Core
                 }
 
                 AnchorToWorld();
-                ConsoleMessage.Send(debugMode, $"Avatar - Remote user: Position applied at {transform.position} for UserGuid={UserGuid}", Color.green);
+                ConsoleMessage.Send(debugMode, $"Avatar - Remote user initialized. IsRemote={IsRemote}, UserGuid={UserGuid}", Color.green);
             }
 
             if (head != null) head.gameObject.SetActive(true);
@@ -275,7 +279,15 @@ namespace MUES.Core
             if (nameTag != null)
                 nameTagCanvasGroup.alpha = 1f;
 
-            SetupVoiceComponents();
+            if (Object.HasInputAuthority)
+            {
+                SetupVoiceComponents();
+            }
+            else
+            {
+                voiceSetupPending = true;
+                StartCoroutine(DelayedVoiceSetup());
+            }
 
             if (destroyOwnMarker && Object.HasInputAuthority)
                 StartCoroutine(DestroyOwnMarkerRoutine());
@@ -286,6 +298,19 @@ namespace MUES.Core
             initialized = true;
 
             ConsoleMessage.Send(debugMode, "Avatar - Component Init ready. - Avatar Setup complete", Color.green);
+        }
+
+        /// <summary>
+        /// Verzögertes Voice-Setup für Remote-Spieler um sicherzustellen dass alle Networked Properties synchronisiert sind.
+        /// </summary>
+        private IEnumerator DelayedVoiceSetup()
+        {
+            yield return new WaitForSeconds(0.5f);
+            
+            ConsoleMessage.Send(debugMode, $"Avatar - Delayed Voice Setup starting. IsRemote={IsRemote}", Color.cyan);
+            
+            SetupVoiceComponents();
+            voiceSetupPending = false;
         }
 
         /// <summary>
@@ -530,7 +555,12 @@ namespace MUES.Core
             UpdateHandMarker(showFullAvatar && LeftHandVisible, handMarkerLeft, handRendererL,
                 LeftHandLocalPos, LeftHandLocalRot, ref leftHandVel, ref leftHandSmoothRot);
 
-            EnsureVoiceComponentsActive();
+            voiceCheckTimer += Time.deltaTime;
+            if (voiceCheckTimer >= 2f)
+            {
+                voiceCheckTimer = 0f;
+                EnsureVoiceComponentsActive();
+            }
         }
 
         private void UpdateHandMarker(bool visible, Transform marker, MeshRenderer renderer,
@@ -563,7 +593,7 @@ namespace MUES.Core
             HeadLocalPos = transform.InverseTransformPoint(headWorldPos);
             HeadLocalRot = Quaternion.Inverse(transform.rotation) * headWorldRot;
 
-            if (!ShouldShowAvatar()) return;
+            if (!IsHmdMounted || IsAfk) return;
 
             bool handTracking =
                 OVRInput.IsControllerConnected(OVRInput.Controller.RHand) ||
@@ -756,15 +786,28 @@ namespace MUES.Core
 
             MUES_Networking net = MUES_Networking.Instance;
             if (net == null)
+            {
+                ConsoleMessage.Send(debugMode, "Avatar - ShouldPlayAudio: No MUES_Networking instance!", Color.red);
                 return false;
+            }
 
             bool localUserIsRemote = net.isRemote;
             bool thisAvatarIsRemote = IsRemote;
 
             if (localUserIsRemote)
+            {
+                ConsoleMessage.Send(debugMode, $"Avatar - ShouldPlayAudio: Local is remote, playing audio for {PlayerName}", Color.green);
                 return true;
+            }
 
-            return thisAvatarIsRemote;
+            if (thisAvatarIsRemote)
+            {
+                ConsoleMessage.Send(debugMode, $"Avatar - ShouldPlayAudio: Avatar {PlayerName} is remote, playing audio", Color.green);
+                return true;
+            }
+
+            ConsoleMessage.Send(debugMode, $"Avatar - ShouldPlayAudio: Both local and avatar colocated, NOT playing audio for {PlayerName}", Color.yellow);
+            return false;
         }
 
         /// <summary>
@@ -780,6 +823,8 @@ namespace MUES.Core
 
             MUES_Networking net = MUES_Networking.Instance;
             bool isLocal = Object.HasInputAuthority;
+
+            ConsoleMessage.Send(debugMode, $"Avatar - SetupVoiceComponents: isLocal={isLocal}, IsRemote={IsRemote}, net.isRemote={net?.isRemote}", Color.cyan);
 
             voiceRecorder.TransmitEnabled = isLocal;
             voiceRecorder.enabled = isLocal;
@@ -803,12 +848,16 @@ namespace MUES.Core
                 if (shouldPlayAudio)
                 {
                     voiceAudioSource.spatialBlend = 1f;
-                    voiceAudioSource.minDistance = 1f;
-                    voiceAudioSource.maxDistance = 20f;
+                    voiceAudioSource.minDistance = 0.5f;
+                    voiceAudioSource.maxDistance = 15f;
                     voiceAudioSource.rolloffMode = AudioRolloffMode.Linear;
+                    voiceAudioSource.dopplerLevel = 0f;
+                    voiceAudioSource.spread = 0f;
                     
                     voiceAudioSource.loop = false;
                     voiceAudioSource.playOnAwake = false;
+                    
+                    ConsoleMessage.Send(debugMode, $"Avatar - Spatial Audio configured for {PlayerName}: spatialBlend=1, minDist=0.5, maxDist=15", Color.green);
                 }
                 
                 string localStatus = net?.isRemote == true ? "Remote" : "Colocated";
@@ -827,22 +876,31 @@ namespace MUES.Core
         /// </summary>
         private void EnsureVoiceComponentsActive()
         {
-            if (!voiceSetupComplete || Object.HasInputAuthority) return;
+            if (voiceSetupPending || !voiceSetupComplete || Object.HasInputAuthority) return;
             if (voiceSpeaker == null || voiceAudioSource == null) return;
             
             bool shouldPlayAudio = ShouldPlayAudioForThisAvatar();
+            
+            bool speakerMismatch = voiceSpeaker.enabled != shouldPlayAudio;
+            bool audioSourceMismatch = voiceAudioSource.enabled != shouldPlayAudio;
+            bool muteMismatch = shouldPlayAudio && voiceAudioSource.mute && !IsLocallyMuted;
+            
+            if (speakerMismatch || audioSourceMismatch || muteMismatch)
+            {
+                ConsoleMessage.Send(debugMode, $"Avatar - Voice state correction for {PlayerName}: shouldPlay={shouldPlayAudio}, speaker={voiceSpeaker.enabled}, audioSrc={voiceAudioSource.enabled}, muted={voiceAudioSource.mute}", Color.yellow);
+            }
             
             if (!shouldPlayAudio)
             {
                 if (voiceSpeaker.enabled)
                 {
                     voiceSpeaker.enabled = false;
-                    ConsoleMessage.Send(debugMode, $"Avatar - Disabled voiceSpeaker for colocated player (shouldn't hear).", Color.yellow);
+                    ConsoleMessage.Send(debugMode, $"Avatar - Disabled voiceSpeaker for {PlayerName} (shouldn't hear).", Color.yellow);
                 }
                 if (voiceAudioSource.enabled)
                 {
                     voiceAudioSource.enabled = false;
-                    ConsoleMessage.Send(debugMode, $"Avatar - Disabled voiceAudioSource for colocated player.", Color.yellow);
+                    ConsoleMessage.Send(debugMode, $"Avatar - Disabled voiceAudioSource for {PlayerName}.", Color.yellow);
                 }
                 return;
             }
@@ -850,19 +908,24 @@ namespace MUES.Core
             if (!voiceSpeaker.enabled)
             {
                 voiceSpeaker.enabled = true;
-                ConsoleMessage.Send(debugMode, "Avatar - Re-enabled voiceSpeaker that was disabled.", Color.yellow);
+                ConsoleMessage.Send(debugMode, $"Avatar - Re-enabled voiceSpeaker for {PlayerName}.", Color.yellow);
             }
             
             if (!voiceAudioSource.enabled)
             {
                 voiceAudioSource.enabled = true;
-                ConsoleMessage.Send(debugMode, "Avatar - Re-enabled voiceAudioSource that was disabled.", Color.yellow);
+         
+                voiceAudioSource.spatialBlend = 1f;
+                voiceAudioSource.minDistance = 0.5f;
+                voiceAudioSource.maxDistance = 15f;
+                voiceAudioSource.rolloffMode = AudioRolloffMode.Linear;
+                ConsoleMessage.Send(debugMode, $"Avatar - Re-enabled voiceAudioSource for {PlayerName} with spatial audio.", Color.yellow);
             }
             
             if (voiceAudioSource.mute && !IsLocallyMuted)
             {
                 voiceAudioSource.mute = false;
-                ConsoleMessage.Send(debugMode, "Avatar - Unmuted voiceAudioSource that was muted.", Color.yellow);
+                ConsoleMessage.Send(debugMode, $"Avatar - Unmuted voiceAudioSource for {PlayerName}.", Color.yellow);
             }
         }
 
@@ -879,7 +942,14 @@ namespace MUES.Core
             cachedPlayerName = name;
             UpdateNameTagText();
 
-            if (!Object.HasInputAuthority) ConsoleMessage.Send(true, $"Player \"{name}\" joined the session.", Color.green);
+            if (!Object.HasInputAuthority && voiceSetupComplete)
+            {
+                ConsoleMessage.Send(debugMode, $"Avatar - Player {name} name synced, re-checking voice setup.", Color.cyan);
+                SetupVoiceComponents();
+            }
+
+            if (!Object.HasInputAuthority) 
+                ConsoleMessage.Send(true, $"Player \"{name}\" joined the session.", Color.green);
         }
 
         /// <summary>
