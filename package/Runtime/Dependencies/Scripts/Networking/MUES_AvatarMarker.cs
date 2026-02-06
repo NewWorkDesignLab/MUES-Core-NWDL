@@ -254,7 +254,10 @@ namespace MUES.Core
                 }
 
                 if (!IsPositionInitialized)
+                {
                     ConsoleMessage.Send(debugMode, "Avatar - Timeout waiting for position initialization from remote player!", Color.red);
+                    yield break;
+                }
 
                 AnchorToWorld();
                 ConsoleMessage.Send(debugMode, $"Avatar - Remote user: Position applied at {transform.position} for UserGuid={UserGuid}", Color.green);
@@ -744,6 +747,27 @@ namespace MUES.Core
         }
 
         /// <summary>
+        /// Determines if this avatar's audio should be played for the local user.
+        /// </summary>
+        private bool ShouldPlayAudioForThisAvatar()
+        {
+            if (Object.HasInputAuthority)
+                return false;
+
+            MUES_Networking net = MUES_Networking.Instance;
+            if (net == null)
+                return false;
+
+            bool localUserIsRemote = net.isRemote;
+            bool thisAvatarIsRemote = IsRemote;
+
+            if (localUserIsRemote)
+                return true;
+
+            return thisAvatarIsRemote;
+        }
+
+        /// <summary>
         /// Configures voice components based on whether this is the local player or a remote player.
         /// </summary>
         private void SetupVoiceComponents()
@@ -755,7 +779,6 @@ namespace MUES.Core
             }
 
             MUES_Networking net = MUES_Networking.Instance;
-
             bool isLocal = Object.HasInputAuthority;
 
             voiceRecorder.TransmitEnabled = isLocal;
@@ -771,27 +794,32 @@ namespace MUES.Core
             }
             else
             {
-                voiceSpeaker.enabled = true;
-                voiceAudioSource.enabled = true;
-                voiceAudioSource.mute = false;
+                bool shouldPlayAudio = ShouldPlayAudioForThisAvatar();
                 
-                voiceAudioSource.spatialBlend = 1f;
-                voiceAudioSource.minDistance = 1f;
-                voiceAudioSource.maxDistance = 20f;
-                voiceAudioSource.rolloffMode = AudioRolloffMode.Linear;
+                voiceSpeaker.enabled = shouldPlayAudio;
+                voiceAudioSource.enabled = shouldPlayAudio;
+                voiceAudioSource.mute = !shouldPlayAudio;
                 
-                voiceAudioSource.loop = false;
-                voiceAudioSource.playOnAwake = false;
+                if (shouldPlayAudio)
+                {
+                    voiceAudioSource.spatialBlend = 1f;
+                    voiceAudioSource.minDistance = 1f;
+                    voiceAudioSource.maxDistance = 20f;
+                    voiceAudioSource.rolloffMode = AudioRolloffMode.Linear;
+                    
+                    voiceAudioSource.loop = false;
+                    voiceAudioSource.playOnAwake = false;
+                }
                 
-                ConsoleMessage.Send(debugMode, $"Avatar - Voice playback enabled for non-local player. IsRemote: {IsRemote}", Color.green);
+                string localStatus = net?.isRemote == true ? "Remote" : "Colocated";
+                string avatarStatus = IsRemote ? "Remote" : "Colocated";
+                ConsoleMessage.Send(debugMode, $"Avatar - Voice playback for {PlayerName}: {(shouldPlayAudio ? "ENABLED" : "DISABLED")} (Local is {localStatus}, Avatar is {avatarStatus})", Color.green);
             }
 
             voiceSetupComplete = true;
 
             string playerType = isLocal ? "Local" : "Remote";
-            string audioStatus = !isLocal ? "ON" : "OFF (Local player)";
-
-            ConsoleMessage.Send(debugMode, $"Avatar - {playerType} Voice Setup complete. Rec: {(isLocal ? "ON" : "OFF")}, Playback: {audioStatus}, Avatar.IsRemote: {IsRemote}", Color.green);
+            ConsoleMessage.Send(debugMode, $"Avatar - {playerType} Voice Setup complete. Avatar.IsRemote: {IsRemote}", Color.green);
         }
 
         /// <summary>
@@ -801,6 +829,23 @@ namespace MUES.Core
         {
             if (!voiceSetupComplete || Object.HasInputAuthority) return;
             if (voiceSpeaker == null || voiceAudioSource == null) return;
+            
+            bool shouldPlayAudio = ShouldPlayAudioForThisAvatar();
+            
+            if (!shouldPlayAudio)
+            {
+                if (voiceSpeaker.enabled)
+                {
+                    voiceSpeaker.enabled = false;
+                    ConsoleMessage.Send(debugMode, $"Avatar - Disabled voiceSpeaker for colocated player (shouldn't hear).", Color.yellow);
+                }
+                if (voiceAudioSource.enabled)
+                {
+                    voiceAudioSource.enabled = false;
+                    ConsoleMessage.Send(debugMode, $"Avatar - Disabled voiceAudioSource for colocated player.", Color.yellow);
+                }
+                return;
+            }
             
             if (!voiceSpeaker.enabled)
             {

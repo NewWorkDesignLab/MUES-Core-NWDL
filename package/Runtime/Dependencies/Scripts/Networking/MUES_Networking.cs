@@ -837,8 +837,6 @@ namespace MUES.Core
                 ConsoleMessage.Send(debugMode, $"Colocated client - anchor at {anchorTransform.position}, sceneParent at {sceneParent?.position}", Color.green);
             }
 
-            ConfigureCamera();
-
             if (!TryLoadRoomData(meta, player))
             {
                 AbortJoin("Failed to load room data.");
@@ -870,6 +868,8 @@ namespace MUES.Core
 
             MUES_RoomVisualizer.Instance.RenderRoomGeometry(true);
             MUES_RoomVisualizer.Instance.ToggleVisualization();
+
+            ConfigureCamera();
 
             MUES_RoomVisualizer.Instance.HideSceneWhileLoading(false);
             isConnected = true;
