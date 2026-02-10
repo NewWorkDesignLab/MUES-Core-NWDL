@@ -1,11 +1,11 @@
 {
-  "name": "com.newworkdesignlab.mues-core",
+  "name": "com.j0nes-l.mues-core",
   "displayName": "MUES Core",
   "version": "1.0.30",
   "unity": "6000.0",
   "description": "Package with multiuser environment sharing functionality for XR Applications in Unity 6.",
   "author": { "name": "NewWorkDesignLab" },
-  "repository": "github:NewWorkDesignLab/MUES-Core",
+  "repository": "github:j0nes-L/MUES-Core",
   "license": "MIT",
   "dependencies": {
     "com.unity.xr.management": "4.4.0",
