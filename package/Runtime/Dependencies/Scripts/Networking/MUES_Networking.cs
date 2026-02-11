@@ -52,13 +52,14 @@ namespace MUES.Core
         public bool showAvatarsForColocated = false;
         [Tooltip("Forces the client into remote mode.")]
         public bool forceClientRemote = false;
+        [Tooltip("Flag to determine whether to use a custom room model instead of the scanned room geometry.")]
+        public bool useCustomRoomModel = false;
 
         [HideInInspector] public Guid anchorGroupUuid;  // The UUID for the shared spatial anchor group.
         [HideInInspector] public SharedSpatialAnchorCore spatialAnchorCore; // Reference to the shared spatial anchor core component.
         [HideInInspector] public Transform anchorTransform, sceneParent; // Parent transform for instantiated scene objects.
         [HideInInspector] public bool isRemote, isConnected, isJoiningAsClient;  // Networking state flags.
         [HideInInspector] public PlayerRef _previousMasterClient = PlayerRef.None; // Previous master client reference.
-        [HideInInspector] public bool useCustomRoomModel; // Flag to determine whether to use a custom room model instead of the scanned room geometry.
 
         private NetworkRunner _runnerPrefab;    // Prefab for the NetworkRunner.
         private MRUK _mruk; // Reference to the MRUK component.
@@ -196,10 +197,12 @@ namespace MUES.Core
         /// <summary>
         /// Invokes the OnPlayerJoined event for the specified player.
         /// </summary>
-        public void InvokeOnPlayerJoined(PlayerRef player)
-        {
-            OnPlayerJoined?.Invoke(player);
-        }
+        public void InvokeOnPlayerJoined(PlayerRef player) => OnPlayerJoined?.Invoke(player);
+
+        /// <summary>
+        /// Invokes the OnCustomRoomInit event.
+        /// </summary>
+        public void InvokeOnCustomRoomInit() => OnCustomRoomInit?.Invoke();
 
         #endregion
 
@@ -337,8 +340,21 @@ namespace MUES.Core
         public async void InitSharedRoom()
         {
             raycastManager.gameObject.SetActive(false);
-
             OnLobbyCreationStarted?.Invoke();
+
+            if (useCustomRoomModel)
+            {
+                ConsoleMessage.Send(debugMode, "Using custom room model - skipping MRUK scene loading.", Color.cyan);
+                
+                OVRCameraRig customRoomRig = FindFirstObjectByType<OVRCameraRig>();
+                Vector3 anchorPosition = customRoomRig != null ? customRoomRig.trackingSpace.position : Vector3.zero;
+                Quaternion anchorRotation = Quaternion.identity;
+                
+
+                spatialAnchorCore.InstantiateSpatialAnchor(roomMiddleAnchor, anchorPosition, anchorRotation);
+                return;
+            }
+            
             var loadResult = await LoadSceneWithTimeout(_mruk, 5f);
 
             if (loadResult != MRUK.LoadDeviceResult.Success)
@@ -352,9 +368,7 @@ namespace MUES.Core
             }
 
             MUES_RoomVisualizer.Instance.RenderRoomGeometry(false);
-
             ConsoleMessage.Send(debugMode, "Room geometry created - placing spatial anchor.", Color.green);
-
             GameObject.Find("CEILING_EffectMesh").layer = GameObject.Find("FLOOR_EffectMesh").layer = 11;
 
             MRUKRoom room = _mruk.GetCurrentRoom();       
@@ -911,6 +925,20 @@ namespace MUES.Core
         }
 
         /// <summary>
+        /// Aborts the join process and cleans up state.
+        /// </summary>
+        private void AbortJoin(string reason)
+        {
+            ConsoleMessage.Send(debugMode, $"[MUES_Networking] AbortJoin: {reason}", Color.red);
+            
+            isJoiningAsClient = false;
+            MUES_RoomVisualizer.Instance?.HideSceneWhileLoading(false);
+            
+            OnRoomJoiningFailed?.Invoke();
+            LeaveRoom();
+        }
+
+        /// <summary>
         /// Waits until the MUES_SessionMeta instance is available. Times out after 7 seconds.
         /// </summary>
         private IEnumerator WaitForSessionMeta()
@@ -1055,7 +1083,8 @@ namespace MUES.Core
         {
             if (useCustomRoomModel)
             {
-                ConsoleMessage.Send(debugMode, "Custom room model used - skipping room data loading.", Color.cyan);
+                ConsoleMessage.Send(debugMode, "Custom room model used - skipping room data loading, firing OnCustomRoomInit.", Color.cyan);
+                
                 OnCustomRoomInit?.Invoke();
                 return true;
             }
@@ -1091,20 +1120,6 @@ namespace MUES.Core
             ConsoleMessage.Send(debugMode, "[MUES_Networking] Room data not found in Session Meta after retries. Remote client may not see room geometry.", Color.red);
             return true;
         }
-
-        /// <summary>
-        /// Aborts the join process with an error message and leaves the room.
-        /// </summary>
-        private void AbortJoin(string errorMessage)
-        {
-            ConsoleMessage.Send(debugMode, $"[MUES_NetworkingEvents] {errorMessage}", Color.red);
-            MUES_RoomVisualizer.Instance.HideSceneWhileLoading(false);
-            LeaveRoom();
-        }
-
-        #endregion
-
-        #region Utility Methods
 
         /// <summary>
         /// Captures the room if needed by requesting a scene capture from the OVRSceneManager.

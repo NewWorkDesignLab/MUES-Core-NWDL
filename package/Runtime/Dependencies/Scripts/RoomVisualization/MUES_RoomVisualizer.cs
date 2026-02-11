@@ -31,6 +31,8 @@ namespace MUES.Core
         public MUES_NetworkedTransform networkedChairPrefab;
         [Tooltip("Layer mask for floor raycasting during chair placement.")]
         public LayerMask floorLayer;
+        [Tooltip("Size of the invisible floor plane for custom room models.")]
+        public Vector2 customRoomFloorSize = new Vector2(20f, 20f);
 
         [Header("Debug Settings:")]
         [Tooltip("Enables debug mode for displaying console messages.")]
@@ -246,8 +248,20 @@ namespace MUES.Core
 
             if (_remoteLocalAnchor != null)
             {
-                Destroy(_remoteLocalAnchor.gameObject);
-                _remoteLocalAnchor = null;
+                try
+                {
+                    var anchorGO = _remoteLocalAnchor.gameObject;
+                    Destroy(_remoteLocalAnchor);
+                    _remoteLocalAnchor = null;
+
+                    if (anchorGO != null)
+                        Destroy(anchorGO);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[MUES_RoomVisualizer] Error during anchor cleanup: {ex.Message}");
+                    _remoteLocalAnchor = null;
+                }
             }
 
             if (remoteSceneParent != null)
@@ -349,6 +363,17 @@ namespace MUES.Core
         private IEnumerator CaptureRoomRoutine()
         {
             yield return new WaitForEndOfFrame();
+
+            if (Net != null && Net.useCustomRoomModel)
+            {
+                ConsoleMessage.Send(debugMode, "[MUES_RoomVisualizer] CaptureRoomRoutine: useCustomRoomModel enabled, creating invisible floor for chair placement.", Color.cyan);
+                CreateInvisibleFloorForCustomRoom();
+                
+                Net.InvokeOnCustomRoomInit();
+                
+                yield return SwitchToChairPlacement(true);
+                yield break;
+            }
 
             MRUKRoom room = GetActiveRoom();
             if (room == null)
@@ -543,11 +568,67 @@ namespace MUES.Core
 
             if (floorTransform.childCount == 0)
             {
+                if (Net != null && Net.useCustomRoomModel)
+                {
+                    ConsoleMessage.Send(debugMode, "[MUES_RoomVisualizer] FLOOR has no child objects (custom room model mode).", Color.yellow);
+                    return null;
+                }
+                
                 Debug.LogError("[MUES_RoomVisualizer] CaptureRoomRoutine: FLOOR has no child objects!");
                 return null;
             }
 
             return floorTransform;
+        }
+
+        /// <summary>
+        /// Creates an invisible floor plane for chair placement when using custom room models.
+        /// </summary>
+        private void CreateInvisibleFloorForCustomRoom() => CreateInvisibleFloor(Net?.sceneParent);
+
+        /// <summary>
+        /// Creates an invisible floor plane with the specified parent transform.
+        /// </summary>
+        private void CreateInvisibleFloor(Transform parentTransform)
+        {
+            OVRCameraRig rig = FindFirstObjectByType<OVRCameraRig>();
+            float floorY = rig != null ? rig.trackingSpace.position.y : 0f;
+            floorHeight = floorY;
+
+            GameObject floorParent = new GameObject("FLOOR");
+            if (parentTransform != null)
+            {
+                floorParent.transform.SetParent(parentTransform, false);
+                floorParent.transform.localPosition = Vector3.zero;
+                floorParent.transform.localRotation = Quaternion.identity;
+            }
+            else
+                floorParent.transform.position = new Vector3(0, floorY, 0);
+
+            GameObject invisibleFloor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            invisibleFloor.name = "InvisibleFloorPlane";
+            invisibleFloor.transform.SetParent(floorParent.transform, false);
+            invisibleFloor.transform.localPosition = Vector3.zero;
+            invisibleFloor.transform.localRotation = Quaternion.identity;
+            invisibleFloor.transform.localScale = new Vector3(customRoomFloorSize.x * 0.1f, 1f, customRoomFloorSize.y * 0.1f); // Plane is 10x10 by default
+
+            var meshRenderer = invisibleFloor.GetComponent<MeshRenderer>();
+            if (meshRenderer != null)
+                Destroy(meshRenderer);
+
+            var collider = invisibleFloor.GetComponent<MeshCollider>();
+            if (collider == null)
+                collider = invisibleFloor.AddComponent<MeshCollider>();
+
+            invisibleFloor.layer = LayerMask.NameToLayer("MUES_Floor");
+
+            var rb = invisibleFloor.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            floor = invisibleFloor;
+
+            ConsoleMessage.Send(debugMode, $"[MUES_RoomVisualizer] Created invisible floor at Y={floorY} with size {customRoomFloorSize}", Color.green);
         }
 
         /// <summary>
@@ -631,7 +712,14 @@ namespace MUES.Core
             else
             {
                 Destroy(previewChair);
-                Destroy(floor.transform.parent.gameObject);
+                
+                if (floor != null && floor.transform.parent != null)
+                {
+                    if (Net != null && Net.useCustomRoomModel)
+                        floor.transform.parent.gameObject.SetActive(false);
+                    else
+                        Destroy(floor.transform.parent.gameObject);
+                }
 
                 foreach (var table in currentTableTransforms)
                     Destroy(table.gameObject);
@@ -954,10 +1042,18 @@ namespace MUES.Core
 
             bool anchorCreated = false;
             yield return WaitForConditionWithTimeout(
-                () => _remoteLocalAnchor.Created,
+                () => _remoteLocalAnchor != null && _remoteLocalAnchor.Created,
                 DefaultTimeout,
                 () => anchorCreated = false
             );
+            
+            if (_remoteLocalAnchor == null)
+            {
+                ConsoleMessage.Send(debugMode, "[MUES_RoomVisualizer] Remote local anchor was destroyed during creation.", Color.yellow);
+                if (anchorGO != null) Destroy(anchorGO);
+                yield break;
+            }
+            
             anchorCreated = _remoteLocalAnchor.Created;
 
             if (anchorCreated)
@@ -970,7 +1066,7 @@ namespace MUES.Core
                 ConsoleMessage.Send(debugMode, "[MUES_RoomVisualizer] Failed to create remote local anchor - scene may drift on recenter.", Color.yellow);
                 Destroy(anchorGO);
                 _remoteLocalAnchor = null;
-                Net.LeaveRoom();
+                Net?.LeaveRoom();
             }
         }
 

@@ -31,9 +31,16 @@ namespace MUES.Core
         protected IEnumerator InitAnchorRoutine()
         {
             yield return null;
+
+            if (this == null || gameObject == null)
+                yield break;
+                
             ConsoleMessage.Send(true, "Starting AnchoredNetworkBehavior init.", Color.green);
 
             yield return WaitForCondition(() => Net != null, DefaultTimeout);
+
+            if (this == null || gameObject == null)
+                yield break;
 
             if (Net == null)
             {
@@ -49,10 +56,13 @@ namespace MUES.Core
                 () => TryResolveAnchor(Net, roomVis)
             );
 
+            if (this == null || gameObject == null)
+                yield break;
+
             if (anchor == null)
             {
                 ConsoleMessage.Send(true, "Timeout waiting for anchor!", Color.red);
-                Net.LeaveRoom();
+                Net?.LeaveRoom();
                 yield break;
             }
 
@@ -208,6 +218,10 @@ namespace MUES.Core
             float elapsed = 0f;
             while (!condition() && elapsed < timeout)
             {
+                // Check if the object is still valid
+                if (this == null || gameObject == null)
+                    yield break;
+                    
                 onWaiting?.Invoke();
                 elapsed += Time.deltaTime;
                 yield return null;
