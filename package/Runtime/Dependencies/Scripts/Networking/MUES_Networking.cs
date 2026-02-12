@@ -11,6 +11,8 @@ using UnityEngine.SceneManagement;
 using static Meta.XR.MultiplayerBlocks.Shared.CustomMatchmaking;
 using static OVRInput;
 using Meta.XR;
+using UnityEngine.UI;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -46,6 +48,8 @@ namespace MUES.Core
         [Header("Debug Settings:")]
         [Tooltip("Enable to see debug messages in the console.")]
         public bool debugMode = false;
+        [Tooltip("Custom lobby code to use instead of a randomly generated one (useful for testing).")]
+        public string customLobbyCode;
         [Tooltip("If the QR Code for joining gets displayed immediately.")]
         public bool popUpQRCode = false;
         [Tooltip("If the avatars are shown for all users - even if they are not remote.")]
@@ -240,6 +244,8 @@ namespace MUES.Core
             spatialAnchorCore.OnAnchorCreateCompleted.AddListener(SaveAndShareAnchor);
 
             depthIndex = transform.parent.GetComponentInChildren<SpriteRenderer>();
+
+            if (!string.IsNullOrEmpty(customLobbyCode)) ValidateCustomCode();
         }
 
         private void Update()
@@ -536,12 +542,52 @@ namespace MUES.Core
         }
 
         /// <summary>
+        /// Use to set a custom lobby code instead of a randomly generated one.
+        /// </summary>
+        public void SetCustomLobbyCode(InputField input)
+        {
+            customLobbyCode = input.text;
+            ValidateCustomCode();
+        }
+
+        /// <summary>
+        /// Validates the custom lobby code, ensuring it is not empty and does not exceed the maximum length.
+        /// </summary>
+        private void ValidateCustomCode()
+        {
+            customLobbyCode = customLobbyCode.Replace(' ', '-');
+
+            var sanitized = new System.Text.StringBuilder();
+            foreach (char c in customLobbyCode)
+            {
+                if (char.IsLetterOrDigit(c) || c == '-')
+                    sanitized.Append(c);
+            }
+
+            customLobbyCode = sanitized.ToString().TrimEnd('-');
+
+            if (customLobbyCode.Length > 10)
+            {
+                customLobbyCode = customLobbyCode.Substring(0, 10);
+                ConsoleMessage.Send(debugMode, "Custom lobby code too long - truncated to 10 characters.", Color.yellow);
+            }
+
+            if (string.IsNullOrEmpty(customLobbyCode))
+            {
+                ConsoleMessage.Send(debugMode, "Custom lobby code was empty after sanitization - will use random code.", Color.yellow);
+                return;
+            }
+
+            ConsoleMessage.Send(debugMode, $"Code validation complete! Custom lobby code set to: {customLobbyCode}", Color.green);
+        }
+
+        /// <summary>
         /// Task to create a shared room with a generated token.
         /// </summary>
         public async Task<RoomOperationResult> CreateSharedRoomWithToken()
         {
             var runner = InitializeNetworkRunner();
-            var roomToken = RunTimeUtils.GenerateRandomString(6, false, true, false, false);
+            var roomToken = string.IsNullOrEmpty(customLobbyCode) ? RunTimeUtils.GenerateRandomString(6, false, true, false, false) : customLobbyCode;
             ConsoleMessage.Send(debugMode, $"Trying to create room with token: {roomToken}", Color.cyan);
 
             var startArgs = new StartGameArgs
@@ -1537,7 +1583,9 @@ namespace MUES.Core
 
         #region Player Management
 
-        // Local mute list - each player manages their own muted players locally
+        /// <summary>
+        /// Gets a list of all connected players in the session.
+        /// </summary>
         private HashSet<PlayerRef> locallyMutedPlayers = new HashSet<PlayerRef>();
 
         /// <summary>
