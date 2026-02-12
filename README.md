@@ -24,7 +24,7 @@
 *Future plans include implementing AI-based reconstruction for photorealistic environment sharing.*
 <br><br>
 
-This Framework requires the ```Meta All in One SDK``` *(v.83)*,  ```GLTFast (Unity) - com.unity.cloud.gltfast``` as well as ```Photon Fusion``` and ```Photon Fusion```.
+This Framework requires the ```Meta All in One SDK``` *(v.83)*,  ```GLTFast (Unity) - com.unity.cloud.gltfast``` as well as ```Photon Fusion``` and ```Photon Voice```.
 URP is supported, BRP support is being worked on!
 
 <br>
