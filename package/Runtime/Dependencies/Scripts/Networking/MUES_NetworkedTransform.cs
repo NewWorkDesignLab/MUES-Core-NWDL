@@ -12,7 +12,10 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using GLTFast;
 using GLTFast.Materials;
+
+#if USING_URP
 using UnityEngine.Rendering.Universal;
+#endif
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -39,6 +42,7 @@ namespace MUES.Core
         /// </summary>
         public event Action OnInitialized;
 
+        private GameObject activeRadial;   // Reference to the active loading radial instance
         private Grabbable _grabbable;   // Reference to the Grabbable component
         private GrabInteractable _grabInteractable; // Reference to the GrabInteractable component
         private HandGrabInteractable _handGrabInteractable; // Reference to the HandGrabInteractable component
@@ -120,10 +124,29 @@ namespace MUES.Core
 
             InitializeSpawnerPlayerId();
 
+            bool isLocalSpawner = Object.HasInputAuthority || (Runner.GameMode == GameMode.Shared && Object.HasStateAuthority);
+            if (isLocalSpawner)
+            {
+                activeRadial = Instantiate(MUES_NetworkedObjectManager.Instance.loadingRadial, transform.position, Quaternion.identity);
+                StartCoroutine(UpdateRadialPosition());
+            }
+
             ConsoleMessage.Send(true, $"Networked Transform - Spawned: IsGrabbable={IsGrabbable}, SpawnerControlsTransform={SpawnerControlsTransform}, SpawnerPlayerId={SpawnerPlayerId}, InputAuth={Object.InputAuthority}, LocalPlayer={Runner?.LocalPlayer}, LocalPlayerId={Runner?.LocalPlayer.PlayerId}", Color.magenta);
 
             DisableExistingGrabbableComponents();
             StartCoroutine(InitRoutine());
+        }
+
+        /// <summary>
+        /// Updates the loading radial position to follow the object until initialization is complete.
+        /// </summary>
+        private IEnumerator UpdateRadialPosition()
+        {
+            while (activeRadial != null && !initialized)
+            {
+                activeRadial.transform.position = transform.position;
+                yield return null;
+            }
         }
 
         /// <summary>
@@ -189,6 +212,7 @@ namespace MUES.Core
 
             ConsoleMessage.Send(true, $"Networked Transform - Init complete. Final Pos={transform.position}, Rot={transform.rotation.eulerAngles}, Scale restored to {_cachedScale}", Color.green);
 
+            Destroy(activeRadial);
             OnInitialized?.Invoke();
         }
 
@@ -599,11 +623,12 @@ namespace MUES.Core
         /// </summary>
         private IMaterialGenerator CreateMaterialGenerator()
         {
+#if USING_URP
             var renderPipelineAsset = GraphicsSettings.currentRenderPipeline;
 
             if (renderPipelineAsset is UniversalRenderPipelineAsset urpAsset)
                 return new UniversalRPMaterialGenerator(urpAsset);
-
+#endif
             return null;
         }
 
@@ -693,9 +718,7 @@ namespace MUES.Core
             _handGrabInteractable.InjectRigidbody(rb);
 
             gameObject.AddComponent<TransferOwnershipOnSelect>();
-
             _ownershipTransfer = GetComponent<TransferOwnershipFusion>() ?? gameObject.AddComponent<TransferOwnershipFusion>();
-
             _grabbable.WhenPointerEventRaised += OnPointerEvent;
 
             SetGrabbableComponentsEnabled(false);

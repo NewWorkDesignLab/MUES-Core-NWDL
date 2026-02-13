@@ -14,6 +14,8 @@ namespace MUES.Core
         [Header("Model Loading Settings")]
         [Tooltip("The networked container prefab used to load GLB models.")]
         public NetworkObject loadedModelContainer;
+        [Tooltip("A radial loading indicator prefab to show while models are downloading.")]
+        public GameObject loadingRadial;
         [Tooltip("The API key used for authenticating model download requests.")]
         public string modelApiKey;
         [Tooltip("Enable to see debug messages in the console.")]

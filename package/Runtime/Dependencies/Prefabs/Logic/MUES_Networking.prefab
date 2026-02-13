@@ -55,16 +55,18 @@ MonoBehaviour:
   qrSendToken: 
   modelDownloadDomain: 
   debugMode: 1
+  customLobbyCode: 
   popUpQRCode: 0
   showAvatarsForColocated: 0
   forceClientRemote: 0
+  useCustomRoomModel: 0
   spatialAnchorCore: {fileID: 0}
   anchorTransform: {fileID: 0}
   sceneParent: {fileID: 0}
   isRemote: 0
   isConnected: 0
   isJoiningAsClient: 0
-  heightCalibrationOffset: 0
+  activeRoom: {fileID: 0}
 --- !u!114 &6566433108082974095
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -91,6 +93,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HSXR_ModelInstantiator
   loadedModelContainer: {fileID: 8157172237301098672, guid: 43745fd7750eeb24988086ad7df7036c, type: 3}
+  loadingRadial: {fileID: 9171883513046839127, guid: 81961cd6ae3e3504087d2e5307814f10, type: 3}
+  modelApiKey: 
   debugMode: 1
 --- !u!1 &1960051199189911029
 GameObject:

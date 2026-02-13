@@ -3184,7 +3184,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b94872fb7c46b824c979f949da8f8737, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MUES-Core.Runtime::RotateSelf
-  rotationSpeed: 30
+  rotationSpeed: 150
   rotationAxis: Z
   active: 1
 --- !u!1 &7038060085938574400

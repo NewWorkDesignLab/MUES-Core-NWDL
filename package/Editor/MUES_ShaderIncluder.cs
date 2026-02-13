@@ -8,10 +8,22 @@ namespace MUES.Editor
 {
     public static class MUES_ShaderIncluder
     {
-        private static readonly string[] RequiredShaderNames = new string[]
+        private static readonly string[] URPShaderNames = new string[]
         {
             "Universal Render Pipeline/Lit",
             "Universal Render Pipeline/Unlit",
+        };
+
+        private static readonly string[] BRPShaderNames = new string[]
+        {
+            "Standard",
+            "Standard (Specular setup)",
+            "Unlit/Texture",
+            "Unlit/Color",
+        };
+
+        private static readonly string[] CommonShaderNames = new string[]
+        {
             "Sprites/Default",
             "UI/Default",
         };
@@ -22,6 +34,39 @@ namespace MUES.Editor
             "Assets/MUES-Core",
             "Assets/MUES"
         };
+
+        /// <summary>
+        /// Determines if the project is using URP.
+        /// </summary>
+        private static bool IsUsingURP()
+        {
+            var currentRP = GraphicsSettings.currentRenderPipeline;
+            if (currentRP == null) return false;
+            
+            return currentRP.GetType().Name.Contains("Universal");
+        }
+
+        /// <summary>
+        /// Gets the required shader names based on the current render pipeline.
+        /// </summary>
+        private static string[] GetRequiredShaderNames()
+        {
+            var shaderList = new List<string>();  
+            shaderList.AddRange(CommonShaderNames);
+            
+            if (IsUsingURP())
+            {
+                shaderList.AddRange(URPShaderNames);
+                Debug.Log("[MUES] Detected Universal Render Pipeline");
+            }
+            else
+            {
+                shaderList.AddRange(BRPShaderNames);
+                Debug.Log("[MUES] Detected Built-in Render Pipeline");
+            }
+            
+            return shaderList.ToArray();
+        }
 
         [MenuItem("MUES/Shaders/Add Required Shaders")]
         public static void AddRequiredShaders()
@@ -40,13 +85,18 @@ namespace MUES.Editor
             }
 
             int addedCount = 0;
+            string[] requiredShaders = GetRequiredShaderNames();
 
-            foreach (string shaderName in RequiredShaderNames)
+            foreach (string shaderName in requiredShaders)
             {
                 if (existingShaders.Contains(shaderName)) continue;
 
                 Shader shader = Shader.Find(shaderName);
-                if (shader == null) continue;
+                if (shader == null)
+                {
+                    Debug.LogWarning($"[MUES] Shader not found: {shaderName}");
+                    continue;
+                }
 
                 AddShaderToArray(arrayProp, shader);
                 existingShaders.Add(shaderName);
@@ -140,6 +190,9 @@ namespace MUES.Editor
             Debug.Log("[MUES] All shaders cleared.");
         }
 
+        /// <summary>
+        /// Returns a SerializedObject for the GraphicsSettings asset, or null if it cannot be loaded.
+        /// </summary>
         private static SerializedObject GetGraphicsSettingsObject()
         {
             var graphicsSettings = AssetDatabase.LoadAssetAtPath<GraphicsSettings>("ProjectSettings/GraphicsSettings.asset");
@@ -151,6 +204,9 @@ namespace MUES.Editor
             return new SerializedObject(graphicsSettings);
         }
 
+        /// <summary>
+        /// Returns a SerializedObject for the GraphicsSettings asset, or null if it cannot be loaded.
+        /// </summary>
         private static void AddShaderToArray(SerializedProperty arrayProp, Shader shader)
         {
             int index = arrayProp.arraySize;
