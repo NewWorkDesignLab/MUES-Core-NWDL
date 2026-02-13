@@ -1,4 +1,4 @@
-Install via git url with: https://github.com/NewWorkDesignLab/MUES-Core.git?path=/package
+Install via git url with: https://github.com/NewWorkDesignLab/MUES-Core-NWDL.git?path=/package
 
 If you want your avatar or other objects to be visible during loading, assign it the "MUES_RenderWhileLoading" Layer!
 
